@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Doodle Hide & Seek</title>
+<style>
+  canvas { background:#f9f9f9; display:block; margin:auto; }
+</style>
+</head>
+<body>
+
+<canvas id="game" width="600" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const player = { x:100, y:200, r:8, speed:2 };
+const oni = {
+  x:400, y:200,
+  dir:0,
+  speed:1.2,
+  viewAngle: Math.PI/3,
+  viewDist:150,
+  target:null,
+  seeTime:0
+};
+
+const item = { x:300, y:100, r:6 };
+const walls = [
+  {x:250,y:0,w:20,h:250},
+  {x:100,y:150,w:150,h:20}
+];
+
+let keys = {};
+let gameOver = false;
+let score = 0;
+
+// 入力
+addEventListener("keydown",e=>keys[e.key]=true);
+addEventListener("keyup",e=>keys[e.key]=false);
+
+// 距離
+const dist = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+
+// ランダム移動先
+function randomTarget(){
+  return {x:Math.random()*600,y:Math.random()*400};
+}
+
+// 更新
+function update(){
+  if(gameOver) return;
+
+  // プレイヤー
+  if(keys["ArrowUp"]) player.y-=player.speed;
+  if(keys["ArrowDown"]) player.y+=player.speed;
+  if(keys["ArrowLeft"]) player.x-=player.speed;
+  if(keys["ArrowRight"]) player.x+=player.speed;
+
+  // 鬼
+  if(!oni.target) oni.target=randomTarget();
+  const dx=oni.target.x-oni.x;
+  const dy=oni.target.y-oni.y;
+  const d=Math.hypot(dx,dy);
+  oni.dir=Math.atan2(dy,dx);
+  oni.x+=Math.cos(oni.dir)*oni.speed;
+  oni.y+=Math.sin(oni.dir)*oni.speed;
+  if(d<5) oni.target=null;
+
+  // 視界判定
+  const ang = Math.atan2(player.y-oni.y,player.x-oni.x);
+  let diff = Math.abs(((ang-oni.dir+Math.PI*3)%(Math.PI*2))-Math.PI);
+  if(dist(player,oni)<oni.viewDist && diff<oni.viewAngle/2){
+    oni.seeTime+=1/60;
+    if(oni.seeTime>1.2) gameOver=true;
+  } else {
+    oni.seeTime=0;
+  }
+
+  // アイテム取得
+  if(dist(player,item)<player.r+item.r){
+    score++;
+    item.x=200+Math.random()*200;
+    item.y=100+Math.random()*200;
+  }
+}
+
+// 描画
+function draw(){
+  ctx.clearRect(0,0,600,400);
+
+  // 壁
+  ctx.fillStyle="#aaa";
+  walls.forEach(w=>ctx.fillRect(w.x,w.y,w.w,w.h));
+
+  // アイテム
+  ctx.fillStyle="gold";
+  ctx.beginPath();
+  ctx.arc(item.x,item.y,item.r,0,Math.PI*2);
+  ctx.fill();
+
+  // 視界
+  ctx.fillStyle="rgba(255,0,0,0.2)";
+  ctx.beginPath();
+  ctx.moveTo(oni.x,oni.y);
+  ctx.arc(oni.x,oni.y,oni.viewDist,
+    oni.dir-oni.viewAngle/2,
+    oni.dir+oni.viewAngle/2);
+  ctx.fill();
+
+  // 鬼
+  ctx.fillStyle="red";
+  ctx.beginPath();
+  ctx.arc(oni.x,oni.y,10,0,Math.PI*2);
+  ctx.fill();
+
+  // プレイヤー
+  ctx.fillStyle="blue";
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+  ctx.fill();
+
+  // UI
+  ctx.fillStyle="#000";
+  ctx.fillText("Score: "+score,10,20);
+  if(gameOver) ctx.fillText("GAME OVER",250,200);
+}
+
+// ループ
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
