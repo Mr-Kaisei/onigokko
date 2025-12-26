@@ -26,6 +26,14 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+// ===== 壁 =====
+const walls = [
+  { x: 300, y: 80, w: 200, h: 20 },
+  { x: 300, y: 400, w: 200, h: 20 },
+  { x: 200, y: 180, w: 20, h: 140 },
+  { x: 580, y: 180, w: 20, h: 140 }
+];
+
 // ===== プレイヤー =====
 const player = {
   x: 120,
@@ -36,7 +44,7 @@ const player = {
 
 // ===== 鬼 =====
 const oni = {
-  x: 600,
+  x: 650,
   y: 250,
   dir: 0,
   speed: 1.4,
@@ -55,8 +63,6 @@ const item = {
 
 let score = 0;
 let gameOver = false;
-
-// ===== 入力 =====
 let keys = {};
 
 // ===== 仮想スティック =====
@@ -79,11 +85,21 @@ function randomTarget() {
   };
 }
 
-// ===== キーボード操作 =====
+// ===== 壁衝突判定（円 vs 矩形）=====
+function hitWall(x, y, r) {
+  for (const w of walls) {
+    const nx = Math.max(w.x, Math.min(x, w.x + w.w));
+    const ny = Math.max(w.y, Math.min(y, w.y + w.h));
+    if (Math.hypot(x - nx, y - ny) < r) return true;
+  }
+  return false;
+}
+
+// ===== キーボード =====
 addEventListener("keydown", e => keys[e.key] = true);
 addEventListener("keyup", e => keys[e.key] = false);
 
-// ===== タッチ操作 =====
+// ===== タッチ =====
 canvas.addEventListener("touchstart", e => {
   e.preventDefault();
   const t = e.touches[0];
@@ -91,16 +107,13 @@ canvas.addEventListener("touchstart", e => {
   const x = t.clientX - rect.left;
   const y = t.clientY - rect.top;
 
-  // 左半分：移動スティック
   if (x < canvas.width / 2) {
     joystick.active = true;
     joystick.startX = x;
     joystick.startY = y;
     joystick.dx = 0;
     joystick.dy = 0;
-  }
-  // 右半分：音（鬼を引き寄せる）
-  else {
+  } else {
     oni.target = { x, y };
   }
 });
@@ -134,7 +147,6 @@ function update() {
 
   // --- プレイヤー移動 ---
   let vx = 0, vy = 0;
-
   if (keys["ArrowUp"]) vy -= 1;
   if (keys["ArrowDown"]) vy += 1;
   if (keys["ArrowLeft"]) vx -= 1;
@@ -145,13 +157,17 @@ function update() {
     vy += joystick.dy / joystick.radius;
   }
 
-  const vlen = Math.hypot(vx, vy);
-  if (vlen > 0) {
-    player.x += (vx / vlen) * player.speed;
-    player.y += (vy / vlen) * player.speed;
+  const len = Math.hypot(vx, vy);
+  if (len > 0) {
+    const nx = player.x + (vx / len) * player.speed;
+    const ny = player.y + (vy / len) * player.speed;
+    if (!hitWall(nx, ny, player.r)) {
+      player.x = nx;
+      player.y = ny;
+    }
   }
 
-  // --- 鬼の移動 ---
+  // --- 鬼移動 ---
   if (!oni.target) oni.target = randomTarget();
 
   const dx = oni.target.x - oni.x;
@@ -159,8 +175,15 @@ function update() {
   const d = Math.hypot(dx, dy);
 
   oni.dir = Math.atan2(dy, dx);
-  oni.x += Math.cos(oni.dir) * oni.speed;
-  oni.y += Math.sin(oni.dir) * oni.speed;
+  const nx = oni.x + Math.cos(oni.dir) * oni.speed;
+  const ny = oni.y + Math.sin(oni.dir) * oni.speed;
+
+  if (!hitWall(nx, ny, 10)) {
+    oni.x = nx;
+    oni.y = ny;
+  } else {
+    oni.target = null;
+  }
 
   if (d < 6) oni.target = null;
 
@@ -175,7 +198,7 @@ function update() {
     oni.seeTime = 0;
   }
 
-  // --- アイテム取得 ---
+  // --- アイテム ---
   if (dist(player, item) < player.r + item.r) {
     score++;
     item.x = 200 + Math.random() * 400;
@@ -187,13 +210,17 @@ function update() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // 壁
+  ctx.fillStyle = "#444";
+  walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
+
   // アイテム
   ctx.fillStyle = "gold";
   ctx.beginPath();
   ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2);
   ctx.fill();
 
-  // 鬼の視界
+  // 鬼視界
   ctx.fillStyle = "rgba(255,0,0,0.2)";
   ctx.beginPath();
   ctx.moveTo(oni.x, oni.y);
@@ -228,15 +255,13 @@ function draw() {
     ctx.fillText("GAME OVER", canvas.width / 2 - 90, canvas.height / 2);
   }
 
-  // スティック描画
+  // スティック
   if (joystick.active) {
     ctx.strokeStyle = "rgba(0,0,0,0.3)";
     ctx.lineWidth = 2;
-
     ctx.beginPath();
     ctx.arc(joystick.startX, joystick.startY, joystick.radius, 0, Math.PI * 2);
     ctx.stroke();
-
     ctx.beginPath();
     ctx.arc(
       joystick.startX + joystick.dx,
