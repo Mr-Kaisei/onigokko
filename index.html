@@ -28,7 +28,7 @@ const ctx = canvas.getContext("2d");
 canvas.width = 800;
 canvas.height = 500;
 
-// ===== 壁（入口あり）=====
+// ===== 壁 =====
 const walls = [
   { x: 260, y: 140, w: 280, h: 20 },
   { x: 260, y: 340, w: 280, h: 20 },
@@ -69,7 +69,7 @@ let joystick = {
   radius: 60
 };
 
-// ===== ユーティリティ =====
+// ===== 共通 =====
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function randomTarget() {
@@ -89,23 +89,23 @@ function hitWall(x, y, r) {
   return false;
 }
 
-// ===== 視線が壁で遮られるか =====
-function blockedByWall(ax, ay, bx, by) {
-  for (const w of walls) {
-    for (let t = 0; t <= 1; t += 0.05) {
-      const x = ax + (bx - ax) * t;
-      const y = ay + (by - ay) * t;
+// ===== レイが壁に当たる距離 =====
+function rayDistance(ax, ay, angle, maxDist) {
+  for (let d = 0; d < maxDist; d += 4) {
+    const x = ax + Math.cos(angle) * d;
+    const y = ay + Math.sin(angle) * d;
+    for (const w of walls) {
       if (
         x > w.x &&
         x < w.x + w.w &&
         y > w.y &&
         y < w.y + w.h
       ) {
-        return true;
+        return d;
       }
     }
   }
-  return false;
+  return maxDist;
 }
 
 // ===== 入力 =====
@@ -123,9 +123,8 @@ canvas.addEventListener("touchstart", e => {
     joystick.active = true;
     joystick.startX = x;
     joystick.startY = y;
-    joystick.dx = joystick.dy = 0;
   } else {
-    oni.target = { x, y }; // 音
+    oni.target = { x, y };
   }
 });
 
@@ -152,7 +151,6 @@ canvas.addEventListener("touchend", () => {
 function update() {
   if (gameOver) return;
 
-  // プレイヤー
   let vx = 0, vy = 0;
   if (keys["ArrowUp"]) vy--;
   if (keys["ArrowDown"]) vy++;
@@ -174,7 +172,6 @@ function update() {
     }
   }
 
-  // 鬼
   if (!oni.target) oni.target = randomTarget();
   const dx = oni.target.x - oni.x;
   const dy = oni.target.y - oni.y;
@@ -193,14 +190,14 @@ function update() {
 
   if (d < 6) oni.target = null;
 
-  // 視界（壁で遮られる）
+  // 見つかり判定（壁考慮）
   const ang = Math.atan2(player.y - oni.y, player.x - oni.x);
   const diff = Math.abs(((ang - oni.dir + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+  const rayDist = rayDistance(oni.x, oni.y, ang, oni.viewDist);
 
   const canSee =
-    dist(player, oni) < oni.viewDist &&
     diff < oni.viewAngle / 2 &&
-    !blockedByWall(oni.x, oni.y, player.x, player.y);
+    dist(player, oni) < rayDist;
 
   if (canSee) {
     oni.seeTime += 1 / 60;
@@ -209,7 +206,6 @@ function update() {
     oni.seeTime = 0;
   }
 
-  // アイテム
   if (dist(player, item) < player.r + item.r) {
     score++;
     item.x = 350 + Math.random() * 100;
@@ -221,33 +217,41 @@ function update() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // 壁
   ctx.fillStyle = "#000";
   walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
 
-  ctx.fillStyle = "gold";
-  ctx.beginPath();
-  ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "rgba(255,0,0,0.2)";
+  // 視界（壁で止まる）
+  ctx.fillStyle = "rgba(255,0,0,0.25)";
   ctx.beginPath();
   ctx.moveTo(oni.x, oni.y);
-  ctx.arc(
-    oni.x, oni.y,
-    oni.viewDist,
-    oni.dir - oni.viewAngle / 2,
-    oni.dir + oni.viewAngle / 2
-  );
+  for (let a = -oni.viewAngle / 2; a <= oni.viewAngle / 2; a += 0.05) {
+    const ang = oni.dir + a;
+    const d = rayDistance(oni.x, oni.y, ang, oni.viewDist);
+    ctx.lineTo(
+      oni.x + Math.cos(ang) * d,
+      oni.y + Math.sin(ang) * d
+    );
+  }
+  ctx.closePath();
   ctx.fill();
 
+  // 鬼
   ctx.fillStyle = "red";
   ctx.beginPath();
   ctx.arc(oni.x, oni.y, 10, 0, Math.PI * 2);
   ctx.fill();
 
+  // プレイヤー
   ctx.fillStyle = "blue";
   ctx.beginPath();
   ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // アイテム
+  ctx.fillStyle = "gold";
+  ctx.beginPath();
+  ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = "#000";
@@ -263,17 +267,9 @@ function draw() {
     ctx.beginPath();
     ctx.arc(joystick.startX, joystick.startY, joystick.radius, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(
-      joystick.startX + joystick.dx,
-      joystick.startY + joystick.dy,
-      15, 0, Math.PI * 2
-    );
-    ctx.stroke();
   }
 }
 
-// ===== ループ =====
 function loop() {
   update();
   draw();
