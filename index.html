@@ -30,13 +30,9 @@ canvas.height = 500;
 
 // ===== 壁（入口あり）=====
 const walls = [
-  // 上
   { x: 260, y: 140, w: 280, h: 20 },
-  // 左
-  { x: 260, y: 140, w: 20, h: 220 },
-  // 下
   { x: 260, y: 340, w: 280, h: 20 },
-  // 右（入口分あける）
+  { x: 260, y: 140, w: 20, h: 220 },
   { x: 520, y: 140, w: 20, h: 90 },
   { x: 520, y: 270, w: 20, h: 90 }
 ];
@@ -46,7 +42,8 @@ const player = { x: 120, y: 250, r: 8, speed: 2.2 };
 
 // ===== 鬼 =====
 const oni = {
-  x: 650, y: 250,
+  x: 650,
+  y: 250,
   dir: 0,
   speed: 1.4,
   viewAngle: Math.PI / 3,
@@ -55,7 +52,7 @@ const oni = {
   seeTime: 0
 };
 
-// ===== アイテム（中に配置）=====
+// ===== アイテム =====
 const item = { x: 400, y: 250, r: 6 };
 
 let score = 0;
@@ -64,15 +61,22 @@ let keys = {};
 
 // ===== スティック =====
 let joystick = {
-  active: false, startX: 0, startY: 0,
-  dx: 0, dy: 0, radius: 60
+  active: false,
+  startX: 0,
+  startY: 0,
+  dx: 0,
+  dy: 0,
+  radius: 60
 };
 
-// ===== 共通 =====
+// ===== ユーティリティ =====
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function randomTarget() {
-  return { x: Math.random() * canvas.width, y: Math.random() * canvas.height };
+  return {
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height
+  };
 }
 
 // ===== 壁当たり判定 =====
@@ -81,6 +85,25 @@ function hitWall(x, y, r) {
     const nx = Math.max(w.x, Math.min(x, w.x + w.w));
     const ny = Math.max(w.y, Math.min(y, w.y + w.h));
     if (Math.hypot(x - nx, y - ny) < r) return true;
+  }
+  return false;
+}
+
+// ===== 視線が壁で遮られるか =====
+function blockedByWall(ax, ay, bx, by) {
+  for (const w of walls) {
+    for (let t = 0; t <= 1; t += 0.05) {
+      const x = ax + (bx - ax) * t;
+      const y = ay + (by - ay) * t;
+      if (
+        x > w.x &&
+        x < w.x + w.w &&
+        y > w.y &&
+        y < w.y + w.h
+      ) {
+        return true;
+      }
+    }
   }
   return false;
 }
@@ -156,25 +179,35 @@ function update() {
   const dx = oni.target.x - oni.x;
   const dy = oni.target.y - oni.y;
   const d = Math.hypot(dx, dy);
-  oni.dir = Math.atan2(dy, dx);
 
+  oni.dir = Math.atan2(dy, dx);
   const ox = oni.x + Math.cos(oni.dir) * oni.speed;
   const oy = oni.y + Math.sin(oni.dir) * oni.speed;
+
   if (!hitWall(ox, oy, 10)) {
-    oni.x = ox; oni.y = oy;
+    oni.x = ox;
+    oni.y = oy;
   } else {
     oni.target = null;
   }
 
   if (d < 6) oni.target = null;
 
-  // 視界
+  // 視界（壁で遮られる）
   const ang = Math.atan2(player.y - oni.y, player.x - oni.x);
   const diff = Math.abs(((ang - oni.dir + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-  if (dist(player, oni) < oni.viewDist && diff < oni.viewAngle / 2) {
+
+  const canSee =
+    dist(player, oni) < oni.viewDist &&
+    diff < oni.viewAngle / 2 &&
+    !blockedByWall(oni.x, oni.y, player.x, player.y);
+
+  if (canSee) {
     oni.seeTime += 1 / 60;
     if (oni.seeTime > 1.2) gameOver = true;
-  } else oni.seeTime = 0;
+  } else {
+    oni.seeTime = 0;
+  }
 
   // アイテム
   if (dist(player, item) < player.r + item.r) {
@@ -199,9 +232,12 @@ function draw() {
   ctx.fillStyle = "rgba(255,0,0,0.2)";
   ctx.beginPath();
   ctx.moveTo(oni.x, oni.y);
-  ctx.arc(oni.x, oni.y, oni.viewDist,
+  ctx.arc(
+    oni.x, oni.y,
+    oni.viewDist,
     oni.dir - oni.viewAngle / 2,
-    oni.dir + oni.viewAngle / 2);
+    oni.dir + oni.viewAngle / 2
+  );
   ctx.fill();
 
   ctx.fillStyle = "red";
@@ -228,11 +264,16 @@ function draw() {
     ctx.arc(joystick.startX, joystick.startY, joystick.radius, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(joystick.startX + joystick.dx, joystick.startY + joystick.dy, 15, 0, Math.PI * 2);
+    ctx.arc(
+      joystick.startX + joystick.dx,
+      joystick.startY + joystick.dy,
+      15, 0, Math.PI * 2
+    );
     ctx.stroke();
   }
 }
 
+// ===== ループ =====
 function loop() {
   update();
   draw();
